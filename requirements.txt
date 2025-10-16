@@ -1,0 +1,10 @@
+schedule
+requests
+beautifulsoup4
+flashtext
+sqlalchemy
+streamlit
+pandas
+datetime
+numpy
+scikit-learn
