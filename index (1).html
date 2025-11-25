@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tender Scrapper</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar styling for better aesthetics */
+        #results-container::-webkit-scrollbar {
+            width: 8px;
+            background-color: #f3f4f6;
+        }
+        #results-container::-webkit-scrollbar-thumb {
+            background-color: #6366f1;
+            border-radius: 10px;
+        }
+        /* Custom font */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+    <script> 
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary-blue': '#4f46e5',
+                        'secondary-indigo': '#6366f1',
+                        'ioc-red': '#cc0000', // IOCL brand color hint
+                        'govt-green': '#046a38', // Government brand color hint
+                        'status-pending': '#f59e0b',
+                        'status-assigned': '#10b981',
+                        'status-closed': '#ef4444',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50 min-h-screen p-4 sm:p-8">
+
+    <div id="login-container" class="max-w-md mx-auto mt-20 p-8 bg-white rounded-xl shadow-2xl border border-gray-200">
+        <h2 class="text-3xl font-extrabold text-primary-blue mb-6 text-center">Login to Tender Watch</h2>
+        <form id="login-form" onsubmit="handleLogin(event)">
+            <div class="mb-4">
+                <label for="username" class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                <input
+                    type="text"
+                    id="username"
+                    value="user"
+                    required
+                    class="w-full p-3 border border-gray-300 rounded-lg focus:ring-secondary-indigo focus:border-secondary-indigo transition duration-150"
+                />
+            </div>
+            <div class="mb-6">
+                <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <input
+                    type="password"
+                    id="password"
+                    value="password"
+                    required
+                    class="w-full p-3 border border-gray-300 rounded-lg focus:ring-secondary-indigo focus:border-secondary-indigo transition duration-150"
+                />
+            </div>
+            <p id="login-error" class="text-red-600 text-sm mb-4 hidden">Invalid username or password.</p>
+            <button
+                type="submit"
+                class="w-full bg-secondary-indigo text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:bg-primary-blue transition duration-300 ease-in-out transform hover:scale-[1.01]"
+            >
+                Secure Login
+            </button>
+        </form>
+    </div>
+
+    <div id="main-content" class="max-w-4xl mx-auto hidden">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl sm:text-4xl font-extrabold text-primary-blue mb-2">
+                🔄 Combined Tender Watch
+            </h1>
+            <!-- <p class="text-gray-600 text-lg">Active Tenders from both E-Tenders and IOCL portals</p> -->
+        </header>
+
+        <div class="bg-white p-6 rounded-xl shadow-lg mb-8 border border-gray-200">
+            <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
+                <input
+                    type="text"
+                    id="search-input"
+                    placeholder="Filter by keyword (e.g., 'repairs', 'security', 'digital', 'IOCL')"
+                    class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-secondary-indigo focus:border-secondary-indigo transition duration-150"
+                    onkeyup="performSearch()"
+                />
+                <button
+                    onclick="performSearch()"
+                    class="bg-secondary-indigo text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:bg-primary-blue transition duration-300 ease-in-out transform hover:scale-[1.01] flex items-center justify-center"
+                >
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    Search All Tenders
+                </button>
+            </div>
+        </div>
+
+        <div id="results-container" class="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+            <div id="initial-message" class="text-center p-10 bg-white rounded-xl shadow-inner border-dashed border-2 border-gray-300">
+                <p class="text-gray-500 text-lg">
+                    All combined tenders are loaded below and sorted by the earliest deadline.
+                </p>
+            </div>
+        </div>
+        
+        <footer class="mt-6 text-center text-sm text-gray-500">
+            <p>Displaying <span id="result-count">0</span> matching tenders out of 
+               <span id="total-count">0</span> total combined tenders.</p>
+        </footer>
+    </div>
+
+    <script>
+        // Data manually extracted from BOTH E-Tenders and IOCL screenshots.
+        // --- ADDED: assignedTo and status fields ---
+        const LIVE_TENDERS_DATA = [
+            // --- Data from eTenders Screenshot (First Image) ---
+            { 
+                ref: "TCSL/TTI/047/2025", 
+                title: "Digital Personal Data Protection Act (DPDP Act) 2023 by onboarding a System Integrator (SI)", 
+                closingDate: "27-Nov-2025 11:00 AM", 
+                biddingDate: "27-Nov-2025 11:15 AM",
+                source: "e-Tenders",
+                assignedTo: "Rajesh K.",
+                status: "Assigned"
+            },
+            { 
+                ref: "12/RFO/503/REO", 
+                title: "Repairs to windows, flooring, toilet at planning section, store at REO", 
+                closingDate: "11-Dec-2025 10:00 AM", 
+                biddingDate: "12-Dec-2025 02:00 PM",
+                source: "e-Tenders",
+                assignedTo: "Unassigned",
+                status: "Pending"
+            },
+            
+            // --- Data from IOCL Screenshot (Second Image) ---
+            { 
+                ref: "TCSL/TTI/047/2025", 
+                title: "1. LPG Bottling Plant.", 
+                closingDate: "28-Nov-2025 12:00 PM", 
+                biddingDate: "29-Nov-2025 12:30 PM",
+                source: "IOCL",
+                assignedTo: "Priya S.",
+                status: "Assigned"
+            },
+            { 
+                ref: "UPSD/ILT/2025-26/01/HALDIAINT", 
+                title: "2. CONTRACT FOR SECURITY SERVICES AT HALDIAINE BOTTLING PLANT FROM DGR SPONSORED AGENCIES", 
+                closingDate: "28-Nov-2025 12:00 PM", 
+                biddingDate: "29-Nov-2025 12:30 PM",
+                source: "IOCL",
+                assignedTo: "Rajesh K.",
+                status: "Assigned"
+            },
+            { 
+                ref: "26/01/HALDIAINT", 
+                title: "3. Development of new A site Retail Outlet at Ramnivas", 
+                closingDate: "28-Nov-2025 12:00 PM", 
+                biddingDate: "29-Nov-2025 12:30 PM",
+                source: "IOCL",
+                assignedTo: "Unassigned",
+                status: "Pending"
+            },
+            // Corrigendums included for completeness
+            { 
+                ref: "TAPSG/ENG/F/09/2025-26", 
+                title: "6. Corrigendum Title HOSHWANANGALDO and Statement of credentials", 
+                closingDate: "27-Nov-2025 12:00 PM", 
+                biddingDate: "28-Nov-2025 12:00 PM",
+                source: "IOCL Corrigendum",
+                assignedTo: "Vikram R.",
+                status: "Closed"
+            },
+            { 
+                ref: "BEY/CONT/25-26/1069", 
+                title: "6. Extension 1", 
+                closingDate: "27-Nov-2025 12:00 PM", 
+                biddingDate: "28-Nov-2025 12:00 PM",
+                source: "IOCL Corrigendum",
+                assignedTo: "Vikram R.",
+                status: "Closed"
+            },
+            { 
+                ref: "SRCC/H&S/17/49/W&SO/2025-26", 
+                title: "7. Technical Corrigendum", 
+                closingDate: "29-Nov-2025 01:00 PM", 
+                biddingDate: "01-Dec-2025 09:00 AM",
+                source: "IOCL Corrigendum",
+                assignedTo: "Rajesh K.",
+                status: "Assigned"
+            },
+        ];
+
+        document.getElementById('total-count').textContent = LIVE_TENDERS_DATA.length;
+
+        /**
+         * Function to get status styling
+         */
+        function getStatusStyling(status) {
+            switch (status) {
+                case 'Assigned':
+                    return 'bg-status-assigned text-white';
+                case 'Pending':
+                    return 'bg-status-pending text-white';
+                case 'Closed':
+                    return 'bg-status-closed text-white';
+                default:
+                    return 'bg-gray-400 text-white';
+            }
+        }
+
+        /**
+         * Converts a tender object into an HTML card string, using the requested fields.
+         */
+        function createTenderCard(tender) {
+            // Determine styling based on source
+            let sourceLabel, borderClass, sourceClass;
+            if (tender.source.includes('IOCL')) {
+                sourceLabel = tender.source.replace('IOCL', 'IOCL');
+                borderClass = 'border-ioc-red';
+                sourceClass = 'bg-red-50 text-ioc-red';
+            } else {
+                sourceLabel = tender.source;
+                borderClass = 'border-govt-green';
+                sourceClass = 'bg-green-50 text-govt-green';
+            }
+
+            // Check if deadline is near
+            const closingDateObj = new Date(tender.closingDate);
+            const today = new Date();
+            const oneWeekAway = new Date(today.getTime() + (7 * 24 * 60 * 60 * 1000));
+            const isDeadlineNear = closingDateObj < oneWeekAway;
+            
+            // Function to format date strings for display
+            const formatDisplayDate = (dateString) => {
+                try {
+                    const dateParts = dateString.match(/(\d{2}-\w{3}-\d{4}) (\d{2}:\d{2}) (AM|PM)/);
+                    if (dateParts && dateParts.length === 4) {
+                        const [full, datePart, timePart, ampm] = dateParts;
+                        return `${datePart} @ ${timePart} ${ampm}`;
+                    }
+                    return dateString;
+                } catch {
+                    return tender.closingDate; // Fallback
+                }
+            };
+            
+            const deadlineClass = isDeadlineNear ? 'bg-red-100 text-red-700 font-bold' : 'bg-green-100 text-green-700';
+            
+            // --- New Assignment/Status Section ---
+            const assignmentStatus = `
+                <div class="flex items-center space-x-4">
+                    <span class="flex items-center text-sm text-gray-500">
+                        <svg class="w-4 h-4 mr-1 text-secondary-indigo" fill="currentColor" viewBox="0 0 20 20"><path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" fill-rule="evenodd"></path></svg>
+                        Assigned To: <strong class="text-gray-700 ml-1">${tender.assignedTo}</strong>
+                    </span>
+                    <span class="px-3 py-1 text-xs rounded-full font-medium ${getStatusStyling(tender.status)}">
+                        Status: ${tender.status}
+                    </span>
+                </div>
+            `;
+            // -------------------------------------
+
+            return `
+                <div class="tender-card bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition duration-300 ease-in-out border-l-4 ${borderClass}">
+                    <div class="flex justify-between items-start mb-2">
+                        <h2 class="text-xl font-semibold text-gray-800">
+                            ${tender.title}
+                        </h2>
+                        <span class="px-3 py-1 text-xs rounded-full font-medium ${sourceClass} whitespace-nowrap">
+                            ${sourceLabel}
+                        </span>
+                    </div>
+
+                    <div class="flex flex-wrap items-center text-sm text-gray-600 mb-4 space-x-6">
+                        <span class="flex items-center">
+                            <svg class="w-4 h-4 mr-1 text-primary-blue" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2zM9 9V5h2v4h4v2h-4v4H9v-4H5V9h4z" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
+                            Ref No: <span class="text-gray-700 ml-1 font-mono">${tender.ref}</span>
+                        </span>
+                    </div>
+
+                    <div class="mb-4">
+                        ${assignmentStatus}
+                    </div>
+                    <div class="flex justify-between items-center mt-4 pt-4 border-t border-gray-100 flex-wrap">
+                        <div class="flex items-center space-x-4 text-sm font-medium">
+                            <span class="text-gray-500">Open: <strong class="text-gray-700">${formatDisplayDate(tender.biddingDate)}</strong></span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <span class="px-3 py-1 text-xs rounded-full ${deadlineClass} transition duration-300">
+                                Closes: ${formatDisplayDate(tender.closingDate)}
+                            </span>
+                            <button class="bg-primary-blue text-white text-xs font-medium py-2 px-4 rounded-lg hover:bg-secondary-indigo transition duration-150">
+                                View Details
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        /**
+         * Performs the search, sorts the data, and updates the results display.
+         */
+        function performSearch() {
+            const inputElement = document.getElementById('search-input');
+            const container = document.getElementById('results-container');
+            const resultCountSpan = document.getElementById('result-count');
+            
+            const query = inputElement.value.toLowerCase().trim();
+
+            // 1. Filter the tenders based on the search query (includes new fields)
+            const filteredTenders = LIVE_TENDERS_DATA.filter(tender => 
+                tender.title.toLowerCase().includes(query) || 
+                tender.ref.toLowerCase().includes(query) ||
+                tender.source.toLowerCase().includes(query) ||
+                tender.assignedTo.toLowerCase().includes(query) || // Added
+                tender.status.toLowerCase().includes(query)        // Added
+            );
+
+            // 2. Sort the filtered tenders: ASCENDING by Closing Date (earliest deadline first)
+            filteredTenders.sort((a, b) => {
+                const dateA = new Date(a.closingDate);
+                const dateB = new Date(b.closingDate);
+                // Note: The new Date() constructor is a bit lenient but generally works for this format.
+                return dateA - dateB;
+            });
+
+            // 3. Update the display
+            resultCountSpan.textContent = filteredTenders.length;
+
+            if (filteredTenders.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center p-10 bg-white rounded-xl shadow-inner border-dashed border-2 border-gray-300">
+                        <svg class="w-12 h-12 mx-auto text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <h3 class="mt-2 text-xl font-semibold text-gray-900">No Tenders Found</h3>
+                        <p class="mt-1 text-gray-500">Try searching for a different keyword, reference, source, colleague name, or status.</p>
+                    </div>
+                `;
+            } else {
+                const resultsHtml = filteredTenders.map(createTenderCard).join('');
+                container.innerHTML = resultsHtml;
+            }
+        }
+
+        /**
+         * Handles client-side login validation.
+         */
+        function handleLogin(event) {
+            event.preventDefault(); // Stop form from submitting normally
+            
+            const usernameInput = document.getElementById('username').value;
+            const passwordInput = document.getElementById('password').value;
+            const errorElement = document.getElementById('login-error');
+
+            // Hardcoded credentials for demonstration
+            const CORRECT_USERNAME = 'user';
+            const CORRECT_PASSWORD = 'password';
+
+            if (usernameInput === CORRECT_USERNAME && passwordInput === CORRECT_PASSWORD) {
+                // Successful Login
+                document.getElementById('login-container').classList.add('hidden');
+                document.getElementById('main-content').classList.remove('hidden');
+                performSearch(); // Load initial data
+            } else {
+                // Failed Login
+                errorElement.classList.remove('hidden');
+            }
+        }
+
+
+        // Initialize display with the login screen when the page loads
+        window.onload = function() {
+             // Do nothing on load, as the login screen should be visible first.
+             // Data loading will happen after successful login.
+             document.getElementById('initial-message').classList.add('hidden');
+        };
+
+    </script>
+</body>
+</html>
